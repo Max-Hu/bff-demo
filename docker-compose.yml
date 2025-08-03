@@ -1,0 +1,82 @@
+version: '3.8'
+
+services:
+  api-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - API_KEY=your-secret-api-key-here
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_USERNAME=45157642
+      - JENKINS_PASSWORD=19950509@Hz
+      - ORACLE_HOST=oracle
+      - ORACLE_PORT=1521
+      - ORACLE_SERVICE=XE
+      - ORACLE_USERNAME=system
+      - ORACLE_PASSWORD=oracle
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - jenkins
+      - oracle
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - scan-network
+
+  test:
+    build: .
+    command: python -m pytest tests/ -v
+    environment:
+      - API_KEY=test-api-key
+      - JENKINS_URL=http://jenkins:8080
+      - JENKINS_USERNAME=45157642
+      - JENKINS_PASSWORD=19950509@Hz
+      - ORACLE_HOST=oracle
+      - ORACLE_PORT=1521
+      - ORACLE_SERVICE=XE
+      - ORACLE_USERNAME=system
+      - ORACLE_PASSWORD=oracle
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    depends_on:
+      - jenkins
+      - oracle
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - scan-network
+
+  jenkins:
+    image: jenkins/jenkins:jdk21
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      - JENKINS_OPTS=--httpPort=8080
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - scan-network
+
+  oracle:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=oracle
+      - ORACLE_CHARACTERSET=AL32UTF8
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+    networks:
+      - scan-network
+
+volumes:
+  jenkins_home:
+  oracle_data:
+
+networks:
+  scan-network:
+    driver: bridge 

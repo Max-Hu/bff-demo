@@ -1,0 +1,230 @@
+openapi: 3.0.3
+info:
+  title: CI/CD Scan API
+  version: 1.0.0
+  description: >
+    API service for triggering Jenkins pipelines, polling status, viewing logs,
+    receiving Jenkins callbacks, and querying final results.
+
+servers:
+  - url: http://localhost:8000
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+  schemas:
+    TriggerRequest:
+      type: object
+      required: [job_name, parameters]
+      properties:
+        job_name:
+          type: string
+          example: ci-nexus-scan
+        parameters:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            nexusURL: "https://nexus.company.com/artifact/projectX/1.0.0"
+
+    TriggerResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: triggered
+        job_name:
+          type: string
+        build_number:
+          type: integer
+        jenkins_url:
+          type: string
+
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [IN_PROGRESS, SUCCESS, FAILURE, ABORTED]
+        progress_percent:
+          type: number
+        start_time:
+          type: string
+          format: date-time
+        estimated_end_time:
+          type: string
+          format: date-time
+
+    LogResponse:
+      type: object
+      properties:
+        lines:
+          type: array
+          items:
+            type: string
+
+    CallbackRequest:
+      type: object
+      required: [job_name, build_number, status, results]
+      properties:
+        job_name:
+          type: string
+        build_number:
+          type: integer
+        status:
+          type: string
+          enum: [SUCCESS, FAILURE]
+        results:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            report_url: "http://jenkins/job/ci-scan/207/report.html"
+            risk_score: "medium"
+        timestamp:
+          type: string
+          format: date-time
+
+    CallbackResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: received
+
+    ResultResponse:
+      type: object
+      properties:
+        job_name:
+          type: string
+        build_number:
+          type: integer
+        status:
+          type: string
+        results:
+          type: object
+          additionalProperties:
+            type: string
+        timestamp:
+          type: string
+          format: date-time
+
+paths:
+  /api/scan/trigger:
+    post:
+      summary: Trigger a Jenkins job with parameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerRequest'
+      responses:
+        '200':
+          description: Job triggered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerResponse'
+      security:
+        - ApiKeyAuth: []
+
+  /api/scan/status:
+    get:
+      summary: Get Jenkins build status
+      parameters:
+        - name: job_name
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: build_number
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Build status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+      security:
+        - ApiKeyAuth: []
+
+  /api/scan/log:
+    get:
+      summary: Get Jenkins build logs
+      parameters:
+        - name: job_name
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: build_number
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: tail
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Log lines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogResponse'
+      security:
+        - ApiKeyAuth: []
+
+  /api/scan/callback:
+    post:
+      summary: Callback endpoint Jenkins calls after pipeline completes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CallbackRequest'
+      responses:
+        '200':
+          description: Callback accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackResponse'
+      security:
+        - ApiKeyAuth: []
+
+  /api/scan/result:
+    get:
+      summary: Get final stored scan result
+      parameters:
+        - name: job_name
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: build_number
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Final result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultResponse'
+      security:
+        - ApiKeyAuth: []

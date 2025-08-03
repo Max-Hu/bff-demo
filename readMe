@@ -1,0 +1,52 @@
+# CI/CD Scan API Server
+
+This project provides a secure API layer to trigger and monitor Jenkins pipelines related to software scanning tasks (such as FOSS, SAST, DAST), receive callback results, and store scan outcomes into a backend system (e.g., Oracle DB). It is designed to support extensibility, observability, and integration with modern UI dashboards.
+
+---
+
+## 📌 Project Goals
+
+- Abstract complex Jenkins pipeline interactions behind RESTful APIs
+- Allow front-end systems to trigger scans, monitor status, retrieve logs
+- Handle Jenkins post-scan callback to store structured result data
+- Use API Key security to ensure only authorized clients can invoke endpoints
+- Support future extension of scan types, parameters, and result formats
+
+---
+
+## 🧱 System Architecture
+
+```txt
+[ Frontend UI ]
+      |
+      v
+[ FastAPI Server (Python) ]
+      |       |       \
+      |       |        --> Oracle DB (store scan results)
+      |        --> Jenkins API (pipeline trigger, status, logs)
+       --> Auth via x-api-key
+⚙️ Tech Stack
+Layer	Technology	Purpose
+API Server	FastAPI (Python)	RESTful API server with docs
+Workflow	Jenkins	Manages scan pipelines
+Database	Oracle	Stores callback results
+Security	API Key Header	Protects all API routes
+Docs	OpenAPI / Swagger	Auto-generated API docs
+Testing	pytest	Unit test framework for Python
+Container	Docker + Compose	Local dev & deployment support
+
+🔐 API Security
+All endpoints are protected with an API key passed via header:
+
+Header: x-api-key: YOUR_SECRET_KEY
+Requests without the correct key will be rejected with HTTP 401.
+
+📡 API Features Overview
+Endpoint	Method	Description
+/api/scan/trigger	POST	Trigger a Jenkins scan job
+/api/scan/status	GET	Poll build status
+/api/scan/log	GET	Retrieve logs for given build
+/api/scan/callback	POST	Jenkins calls this after job completes
+/api/scan/result	GET	Retrieve final result from backend
+
+Full OpenAPI spec is available in openapi.yaml

@@ -1,0 +1,77 @@
+# Multi-stage build for better optimization
+FROM python:3.11-slim as base
+
+# Set environment variables for faster builds
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Use Chinese mirrors for faster downloads
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libaio1 \
+    wget \
+    unzip \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download Oracle Instant Client in a separate layer for better caching
+FROM base as oracle-client
+RUN mkdir -p /opt/oracle && \
+    cd /opt/oracle && \
+    wget -q --show-progress https://download.oracle.com/otn_software/linux/instantclient/instantclient-basiclite-linuxx64.zip && \
+    unzip -q instantclient-basiclite-linuxx64.zip && \
+    mv instantclient_* instantclient && \
+    rm instantclient-basiclite-linuxx64.zip
+
+# Set Oracle environment variables
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient
+ENV PATH=/opt/oracle/instantclient:$PATH
+
+# Copy Oracle client from previous stage
+COPY --from=oracle-client /opt/oracle /opt/oracle
+
+# Install Python dependencies with Chinese mirror
+FROM base as python-deps
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ --no-cache-dir --upgrade pip && \
+    pip install -i https://pypi.tuna.tsinghua.edu.cn/simple/ --no-cache-dir -r requirements.txt
+
+# Final stage
+FROM base as final
+WORKDIR /app
+
+# Copy Oracle client and Python dependencies from previous stages
+COPY --from=oracle-client /opt/oracle /opt/oracle
+COPY --from=python-deps /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=python-deps /usr/local/bin /usr/local/bin
+
+# Set Oracle environment variables
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient
+ENV PATH=/opt/oracle/instantclient:$PATH
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd --create-home --shell /bin/bash app \
+    && chown -R app:app /app
+USER app
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Run the application
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"] 
